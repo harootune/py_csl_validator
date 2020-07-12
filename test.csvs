@@ -1,0 +1,5 @@
+
+version 1.0
+@totalColumns 2
+column_a: is("a") notEmpty
+column_b: is("b")

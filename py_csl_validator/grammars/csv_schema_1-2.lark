@@ -2,7 +2,7 @@
 
 XSD_DATETIME_LITERAL: XSD_DATE_WITHOUT_TIMEZONE_COMPONENT "T" XSD_TIME_LITERAL
 
-XSD_DATETIME_WITH_TIMEZONE_LITERAL: XSD_DATE_WITHOUT_TIMEZONE_COMPONENT "T" XSD_DATE_WITHOUT_TIMEZONE_COMPONENT XSD_TIMEZONE_COMPONENT
+XSD_DATETIME_WITH_TIMEZONE_LITERAL: XSD_DATE_WITHOUT_TIMEZONE_COMPONENT "T" XSD_TIME_WITHOUT_TIMEZONE_COMPONENT XSD_TIMEZONE_COMPONENT
 
 XSD_DATE_LITERAL: XSD_DATE_WITHOUT_TIMEZONE_COMPONENT XSD_OPTIONAL_TIMEZONE_COMPONENT
 
@@ -42,8 +42,8 @@ prolog: version_decl global_directives
 
 version_decl: ("version 1.0" | "version 1.1" | "version 1.2")
 
-global_directives: separator_directive? quoted_directive? total_columns_directive? permit_empty_directive?
-| (no_header_directive | ignore_column_name_case_directive)? // unordered
+global_directives: (separator_directive | quoted_directive | total_columns_directive | permit_empty_directive
+| no_header_directive | ignore_column_name_case_directive)* // unordered
 
 directive_prefix: "@"
 
@@ -81,7 +81,7 @@ quoted_column_identifier: STRING_LITERAL
 
 column_rule: column_validation_expr* column_directives
 
-column_directives: optional_directive? match_is_false_directive? ignore_case_directive? warning_directive? //unordered
+column_directives: (optional_directive | match_is_false_directive | ignore_case_directive | warning_directive)* //unordered
 
 optional_directive: directive_prefix "optional"
 
@@ -126,7 +126,7 @@ ends_with_expr: "ends(" string_provider ")"
 
 reg_exp_expr: "regex(" STRING_LITERAL ")"
 
-range_expr: "range(" numeric_or_any "," (NUMERIC_LITERAL | NUMERIC_LITERAL "," numeric_or_any) ")"
+range_expr: "range(" (numeric_or_any "," NUMERIC_LITERAL | NUMERIC_LITERAL "," numeric_or_any) ")"
 
 numeric_or_any: NUMERIC_LITERAL | WILDCARD_LITERAL
 
@@ -180,11 +180,11 @@ file_expr: "file(" (string_provider ",")? string_provider ")"
 
 file_count_expr: "fileCount(" file_expr ")"
 
-string_provider: column_ref | STRING_LITERAL | concat_expr | not_ext_expr | uri_decode_expr
+string_provider: column_ref | STRING_LITERAL | concat_expr | no_ext_expr | uri_decode_expr
 
 concat_expr: "concat(" string_provider ("," string_provider)+ ")"
 
-not_ext_expr: "noExt(" string_provider ")"
+no_ext_expr: "noExt(" string_provider ")"
 
 uri_decode_expr: "uriDecode(" string_provider ("," string_provider)? ")"
 
