@@ -77,6 +77,15 @@ class ColumnValidationExpr(ValidatingExpr):  # essentially a wrapper which makes
         pass
 
 
+class ParenthesizedExpr(ValidatingExpr):
+
+    def __init__(self, expressions):
+        self.expressions = expressions
+
+    def validate(self, val):
+        pass
+
+
 class SingleExpr(ValidatingExpr):
 
     def __init__(self, expression, col_ref):
@@ -89,11 +98,143 @@ class SingleExpr(ValidatingExpr):
 
 class IsExpr(ValidatingExpr):
 
-    def __init__(self, string):
-        self.string = string
+    def __init__(self, comparison):
+        self.comparison = comparison
 
     def validate(self, val):
         pass
+
+
+class AnyExpr(ValidatingExpr):
+
+    def __init__(self, comparisons):
+        self.comparisons = comparisons
+
+    def validate(self, val):
+        pass
+
+
+class NotExpr(ValidatingExpr):
+
+    def __init__(self, comparison):
+        self.comparison = comparison
+
+    def validate(self, val):
+        pass
+
+
+class InExpr(ValidatingExpr):
+
+    def __init__(self, comparison):
+        self. comparison = comparison
+
+    def validate(self, val):
+        pass
+
+
+class StartsWithExpr(ValidatingExpr):
+
+    def __init__(self, comparison):
+        self.comparison = comparison
+
+    def validate(self, val):
+        pass
+
+
+class EndsWithExpr(ValidatingExpr):
+
+    def __init__(self, comparison):
+        self.comparison = comparison
+
+    def validate(self, val):
+        pass
+
+
+class RegExpExpr(ValidatingExpr):
+
+    def __init__(self, pattern):
+        self.pattern = pattern
+
+    def validate(self, val):
+        pass
+
+
+class RangeExpr(ValidatingExpr):
+
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def validate(self, val):
+        pass
+
+
+class LengthExpr(ValidatingExpr):
+
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def validate(self, val):
+        pass
+
+
+class EmptyExpr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
+
+class NotEmptyExpr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
+
+class UniqueExpr(ValidatingExpr):
+
+    def __init__(self, columns):
+        self.columns = columns
+
+    def validate(self, val):
+        pass
+
+
+class UriExpr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
+
+class Uuid4Expr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
+
+class PositiveIntegerExpr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
+
+class UppercaseExpr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
+
+class LowercaseExpr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
+
+class IdenticalExpr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
 
 
 # Data-providing expressions #

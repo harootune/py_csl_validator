@@ -103,6 +103,18 @@ class ExpressionIndex:
 
         visitor.stack.append(ec.IsExpr(string))
 
+    def any_expr(self, visitor):
+        strings = []
+        while visitor.stack:
+            if isinstance(visitor.stack[-1], str):
+                strings.append(visitor.stack.pop())
+            else:
+                break
+
+        visitor.stack.append(ec.AnyExpr(strings))
+
+
+
     # Data-providing expressions #
 
     def column_ref(self, visitor):

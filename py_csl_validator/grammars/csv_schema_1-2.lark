@@ -114,7 +114,7 @@ column_ref: "$" (column_identifier | quoted_column_identifier)
 
 is_expr: "is(" string_provider ")"
 
-any_expr: "any(" string_provider ")"
+any_expr: "any(" string_provider ("," string_provider)* ")"
 
 not_expr: "not(" string_provider ")"
 
