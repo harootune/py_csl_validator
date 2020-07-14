@@ -32,6 +32,10 @@ WILDCARD_LITERAL: "*"
 
 IDENT: /[A-Za-z0-9\-_\.]+/
 
+FOLDER_SPECIFICATION_LITERAL: ("\"includeFolder\"" | "\"excludeFolder\"")
+
+VERSION_LITERAL: ("version 1.0" | "version 1.1" | "version 1.2")
+
 
 // rules
 start: schema
@@ -40,7 +44,7 @@ schema: prolog body
 
 prolog: version_decl global_directives
 
-version_decl: ("version 1.0" | "version 1.1" | "version 1.2")
+version_decl: VERSION_LITERAL
 
 global_directives: (separator_directive | quoted_directive | total_columns_directive | permit_empty_directive
 | no_header_directive | ignore_column_name_case_directive)* // unordered
@@ -172,7 +176,7 @@ external_single_expr: explicit_context_expr? (file_exists_expr | integrity_check
 
 file_exists_expr: "fileExists" ("(" string_provider ")")?
 
-integrity_check_expr: "integrityCheck" "(" (string_provider ",")? (string_provider ",")? ("\"includeFolder\"" | "\"excludeFolder\"") ")"
+integrity_check_expr: "integrityCheck" "(" (string_provider ",")? (string_provider ",")? FOLDER_SPECIFICATION_LITERAL ")"
 
 checksum_expr: "checksum(" file_expr "," STRING_LITERAL ")"
 

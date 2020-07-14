@@ -1,11 +1,16 @@
 class Schema:  # TODO: Should this be a ValidatingExpr?
 
-    def __init__(self, body, prolog):
-        self.body = body
+    def __init__(self, prolog, body):
         self.prolog = prolog
+        self.body = body
 
 
 # Prolog #
+class Prolog:
+
+    def __init__(self, version, global_directives):
+        self.version = version
+        self.global_directives = global_directives
 
 
 class GlobalDirectives:
@@ -236,15 +241,114 @@ class IdenticalExpr(ValidatingExpr):
         pass
 
 
+class FileExistsExpr(ValidatingExpr):
+
+    def __init__(self, prefix):
+        self.prefix = prefix
+
+    def validate(self, val):
+        pass
+
+
+class IntegrityCheckExpr(ValidatingExpr):
+
+    def __init__(self, prefix, subfolder, folder_specification):
+        self.prefix = prefix
+        self.subfolder = subfolder if subfolder else 'content/'
+        self.folder_specification = folder_specification
+
+    def validate(self, val):
+        pass
+
+
+class ChecksumExpr(ValidatingExpr):
+
+    def __init__(self, file, algorithm):
+        self.file = file
+        self.algorithm = algorithm
+
+    def validate(self, val):
+        pass
+
+
+class FileCountExpr(ValidatingExpr):
+
+    def __init__(self, file):
+        self.file = file
+
+    def validate(self, val):
+        pass
+
 
 # Data-providing expressions #
 
+class DataExpr:
+
+    def evaluate(self, context):
+        raise NotImplementedError
+
 
 # special case - column-ref, is a wrapper used for type-checking
-class ColumnRef:
+class ColumnRef(DataExpr):
 
     def __init__(self, column):
         self.column = column
+
+    def evaluate(self, context):
+        pass
+
+
+class StringProvider(DataExpr):
+
+    def __init__(self, val):
+        self.val = val
+
+    def evaluate(self, context):
+        pass
+
+
+class ConcatExpr(DataExpr):
+
+    def __init__(self, string_providers):
+        self.string_providers = string_providers
+
+    def evaluate(self, context):
+        pass
+
+
+class NoExtExpr(DataExpr):
+
+    def __init__(self, string_provider):
+        self.string_provider = string_provider
+
+    def evaluate(self, context):
+        pass
+
+
+class UriDecodeExpr(DataExpr):
+
+    def __init__(self, string_provider, encoding):
+        self.string_provider = string_provider
+        self.encoding = encoding
+
+    def evaluate(self, context):
+        pass
+
+
+class FileExpr(DataExpr):
+
+    def __init__(self, prefix, file):
+        self.prefix = prefix
+        self.file = file
+
+    def evaluate(self, context):
+        pass
+
+
+
+
+
+
 
 
 

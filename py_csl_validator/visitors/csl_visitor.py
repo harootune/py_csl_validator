@@ -6,6 +6,9 @@ import py_csl_validator.expressions.expression_classes as ec
 
 
 class CslVisitor:
+    counted_expr = ['parenthesized_expr',
+                    'concat_expr',
+                    'uri_decode_expr']
 
     def __init__(self):
         self.stack = []
@@ -19,25 +22,28 @@ class CslVisitor:
 
         # handle parenthesized expressions
         # in most cases we can avoid explicit counts by exploiting grammatical structure
-        # however, we must do so to properly nest parens
-        if tree.data == 'parenthesized_expr':
-            self.parenthesized_expr(len(tree.children))
+        # however, we must do so to properly handle certain instructions
+        if tree.data in self.counted_expr:
+            self._call_counted_expression(tree)
         else:
             self._call_expression(tree)
 
     def _call_expression(self, tree):
         getattr(self, tree.data, self.__default__)()
 
-    def __default__(self, tree):
+    def _call_counted_expression(self, tree):
+        getattr(self, tree.data, self.__default__)(len(tree.children))
+
+    def __default__(self, *args):
         pass
 
     ## stack operations ##
 
     def schema(self):
         body = self.stack.pop()
-        global_directives = self.stack.pop()
+        prolog = self.stack.pop()
 
-        self.stack.append(ec.Schema(body, global_directives))
+        self.stack.append(ec.Schema(prolog, body))
 
     def parenthesized_expr(self, count):
         expressions = [self.stack.pop() for i in range(count)]
@@ -48,6 +54,11 @@ class CslVisitor:
 
 
     # prolog #
+    def prolog(self):
+        global_directives = self.stack.pop()
+        version = self.stack.pop()
+
+        self.stack.append(ec.Prolog(version, global_directives))
 
     def global_directives(self):
         directives = []
@@ -228,19 +239,80 @@ class CslVisitor:
     def external_single_expr(self):
         self.single_expr()
 
+    def file_exists_expr(self):
+        prefix = None
+        if isinstance(self.stack[-1], (str, ec.ColumnRef)):
+            prefix = self.stack.pop()
 
+        self.stack.append(ec.FileExistsExpr(prefix))
 
+    def integrity_check_expr(self):
+        folder_specification = self.stack.pop()
+        subfolder = None
+        prefix = None
+        if self.stack:
+            if isinstance(self.stack[-1], (str, ec.ColumnRef)):
+                prefix = self.stack.pop()
 
+                if self.stack:
+                    if isinstance(self.stack[-1], (str, ec.ColumnRef)):
+                        prefix, subfolder = self.stack.pop(), prefix
 
+        self.stack.append(ec.IntegrityCheckExpr(prefix, subfolder, folder_specification))
 
+    def checksum_expr(self):
+        algorithm = self.stack.pop()
+        file = self.stack.pop()
 
+        self.stack.append(ec.ChecksumExpr(file, algorithm))
+
+    def file_count_expr(self):
+        file = self.stack.pop()
+
+        self.stack.append(ec.FileCountExpr(file))
 
 
 
     # Data-providing expressions #
 
-    def column_ref(self, visitor):
-        column = visitor.stack.pop()
+    def string_provider(self):
+        val = self.stack.pop()
 
-        visitor.stack.append(ec.ColumnRef(column))
+        self.stack.append(ec.StringProvider(val))
+
+    def column_ref(self):
+        column = self.stack.pop()
+
+        self.stack.append(ec.ColumnRef(column))
+
+    def concat_expr(self, count):
+        string_providers = [self.stack.pop() for i in range(count)]
+
+        self.stack.append(ec.ConcatExpr(string_providers))
+
+    def no_ext_expr(self):
+        string_provider = self.stack.pop()
+
+        self.stack.append(ec.NotExpr(string_provider))
+
+    def uri_decode_expr(self, count):
+        encoding = None
+        string_provider = self.stack.pop()
+
+        if count == 2:
+            encoding, string_provider = string_provider, self.stack.pop()
+
+        self.stack.append(ec.UriDecodeExpr(string_provider, encoding))
+
+    def file_expr(self):
+        file = self.stack.pop()
+        prefix = None
+        if self.stack:
+            if isinstance(self.stack[-1], ec.StringProvider):
+                prefix = self.stack.pop()
+
+        self.stack.append(ec.FileExpr(prefix, file))
+
+
+
 
