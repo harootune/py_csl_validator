@@ -6,312 +6,280 @@ import py_csl_validator.expressions.expression_classes as ec
 
 
 class CslVisitor:
-    counted_expr = ['parenthesized_expr',
-                    'concat_expr',
-                    'uri_decode_expr']
 
-    def __init__(self):
-        self.stack = []
+    def __init__(self, tree):
+        self.schema = self.visit(tree)
 
-    def visit(self, tree):
-        for child in tree.children:
-            if isinstance(child, Token):
-                self.stack.append(child.value)
-            elif isinstance(child, Tree):
-                self.visit(child)
+    def visit(self, node):
+        if isinstance(node, Token):
+            return node.value
+        elif isinstance(node, Tree):
+            stack = [self.visit(child) for child in node.children]
+            stack = [element for element in stack if element is not None]
+            return self._call_expression(node, stack)
 
-        # handle parenthesized expressions
-        # in most cases we can avoid explicit counts by exploiting grammatical structure
-        # however, we must do so to properly handle certain instructions
-        if tree.data in self.counted_expr:
-            self._call_counted_expression(tree)
+    def _call_expression(self, node, stack):
+        return getattr(self, node.data, self.__default__)(stack)
+
+    def __default__(self, stack):
+        if not stack:
+            return None
+        elif len(stack) == 1:
+            return stack.pop()
         else:
-            self._call_expression(tree)
-
-    def _call_expression(self, tree):
-        getattr(self, tree.data, self.__default__)()
-
-    def _call_counted_expression(self, tree):
-        getattr(self, tree.data, self.__default__)(len(tree.children))
-
-    def __default__(self, *args):
-        pass
+            raise AttributeError('Complex stack passed to default')
 
     ## stack operations ##
 
-    def schema(self):
-        body = self.stack.pop()
-        prolog = self.stack.pop()
+    def start(self, stack):
+        return stack.pop()
 
-        self.stack.append(ec.Schema(prolog, body))
+    def schema(self, stack):
+        body = stack.pop()
+        prolog = stack.pop()
 
-    def parenthesized_expr(self, count):
-        expressions = [self.stack.pop() for i in range(count)]
+        return ec.Schema(prolog, body)
 
-        self.stack.append(ec.ParenthesizedExpr(expressions))
+    def parenthesized_expr(self, stack):
+        stack.reverse()
+
+        return ec.ParenthesizedExpr(stack)
 
 
 
 
     # prolog #
-    def prolog(self):
-        global_directives = self.stack.pop()
-        version = self.stack.pop()
+    def prolog(self, stack):
+        global_directives = stack.pop()
+        version = stack.pop()
 
-        self.stack.append(ec.Prolog(version, global_directives))
+        return ec.Prolog(version, global_directives)
 
-    def global_directives(self):
-        directives = []
-        while self.stack:
-            if isinstance(self.stack[-1], ec.GlobalDirective):
-                directives.append(self.stack.pop())
-            else:
-                break
+    def global_directives(self, stack):
+        stack.reverse()
 
-        self.stack.append(ec.GlobalDirectives(directives))
+        return ec.GlobalDirectives(stack)
 
-    def separator_directive(self):
-        separator = self.stack.pop()
+    def separator_directive(self, stack):
+        separator = stack.pop()
 
-        self.stack.append(ec.SeparatorDirective(separator))
+        return ec.SeparatorDirective(separator)
 
-    def total_columns_directive(self):
-        num_columns = self.stack.pop()
+    def total_columns_directive(self, stack):
+        num_columns = stack.pop()
 
-        self.stack.append(ec.TotalColumnsDirective(num_columns))
+        return ec.TotalColumnsDirective(num_columns)
 
-    # def permit_empty_directive(self)
+    # def permit_empty_directive(self, stack)
 
-    # def quoted_directive(self):
+    # def quoted_directive(self, stack):
 
-    # def no_header_directive(self):
+    # def no_header_directive(self, stack):
 
-    # def ignore_column_name_case_directive(self):
+    # def ignore_column_name_case_directive(self, stack):
 
     # body #
 
-    def body(self):
-        column_defs = []
-        while self.stack:
-            if isinstance(self.stack[-1], ec.ColumnDefinition):
-                column_defs.append(self.stack.pop())
-            else:
-                break
+    def body(self, stack):
+        stack.reverse()
 
-        self.stack.append(ec.Body(column_defs))
+        return ec.Body(stack)
 
-    def column_definition(self):
-        col_rule = self.stack.pop()
-        col_name = self.stack.pop()
+    def body_part(self, stack):
+        # filter comments
+        for element in stack:
+            if isinstance(element, ec.ColumnDefinition):
+                return element
 
-        self.stack.append(ec.ColumnDefinition(col_name, col_rule))
+    def column_definition(self, stack):
+        col_rule = stack.pop()
+        col_name = stack.pop()
 
-    def column_rule(self):
-        col_directives = self.stack.pop()
-        col_vals = []
-        while self.stack:
-            if isinstance(self.stack[-1], ec.ColumnValidationExpr):
-                col_vals.append(self.stack.pop())
-            else:
-                break
+        return ec.ColumnDefinition(col_name, col_rule)
 
-        self.stack.append(ec.ColumnRule(col_vals, col_directives))
+    def column_rule(self, stack):
+        col_directives = stack.pop()
+        stack.reverse()
 
-    def column_validation_expr(self):
-        expression = self.stack.pop()  # TODO: improve this vocab?
+        return ec.ColumnRule(stack, col_directives)
 
-        self.stack.append(ec.ColumnValidationExpr(expression))
+    def column_validation_expr(self, stack):
+        expression = stack.pop()  # TODO: improve this vocab?
 
-    def single_expr(self):
-        expression = self.stack.pop()
+        return ec.ColumnValidationExpr(expression)
+
+    def single_expr(self, stack):
+        expression = stack.pop()
         col_ref = None
-        if self.stack:
-            if isinstance(self.stack[-1], ec.ColumnRef):
-                col_ref = self.stack.pop()
+        if stack:
+            col_ref = stack.pop()
 
-        self.stack.append(ec.SingleExpr(expression, col_ref))
+        return ec.SingleExpr(expression, col_ref)
 
-    def is_expr(self):
-        comparison = self.stack.pop()
+    def is_expr(self, stack):
+        comparison = stack.pop()
 
-        self.stack.append(ec.IsExpr(comparison))
+        return ec.IsExpr(comparison)
 
-    def any_expr(self):
-        comparisons = []
-        while self.stack:
-            if isinstance(self.stack[-1], (str, int, ec.ColumnRef)):
-                comparisons.append(self.stack.pop())
-            else:
-                break
+    def any_expr(self, stack):
+        stack.reverse()
 
-        self.stack.append(ec.AnyExpr(comparisons))
+        return ec.AnyExpr(stack)
 
-    def not_expr(self):
-        comparison = self.stack.pop()
+    def not_expr(self, stack):
+        comparison = stack.pop()
 
-        self.stack.append(ec.NotExpr(comparison))
+        return ec.NotExpr(comparison)
 
-    def in_expr(self):
-        comparison = self.stack.pop()
+    def in_expr(self, stack):
+        comparison = stack.pop()
 
-        self.stack.append(ec.InExpr(comparison))
+        return ec.InExpr(comparison)
 
-    def starts_with_expr(self):
-        comparison = self.stack.pop()
+    def starts_with_expr(self, stack):
+        comparison = stack.pop()
 
-        self.stack.append(ec.StartsWithExpr(comparison))
+        return ec.StartsWithExpr(comparison)
 
-    def ends_with_expr(self):
-        comparison = self.stack.pop()
+    def ends_with_expr(self, stack):
+        comparison = stack.pop()
 
-        self.stack.append(ec.EndsWithExpr(comparison))
+        return ec.EndsWithExpr(comparison)
 
-    def reg_exp_expr(self):
-        pattern = self.stack.pop()
+    def reg_exp_expr(self, stack):
+        pattern = stack.pop()
 
-        self.stack.append(ec.RegExpExpr(pattern))
+        return ec.RegExpExpr(pattern)
 
-    def range_expr(self):
-        end = self.stack.pop()
-        start = self.stack.pop()
+    def range_expr(self, stack):
+        end = stack.pop()
+        start = stack.pop()
 
-        self.stack.append(ec.RangeExpr(start, end))
+        return ec.RangeExpr(start, end)
 
-    def length_expr(self):
-        start = self.stack.pop()
+    def length_expr(self, stack):
+        start = stack.pop()
         end = None
-        if self.stack:
-            if isinstance(self.stack[-1], (str, int)):
-                end, start = start, self.stack.pop()
+        if stack:
+            end, start = start, stack.pop()
 
-        self.stack.append(ec.LengthExpr(start, end))
+        return ec.LengthExpr(start, end)
 
-    def empty_expr(self):
-        self.stack.append(ec.EmptyExpr())
+    def empty_expr(self, *args):
+        return ec.EmptyExpr()
 
-    def not_empty_expr(self):
-        self.stack.append(ec.NotEmptyExpr())
+    def not_empty_expr(self, *args):
+        return ec.NotEmptyExpr()
 
-    def unique_expr(self):
-        columns = []
-        while self.stack:
-            if isinstance(self.stack[-1], ec.ColumnRef):
-                columns.append(self.stack.pop())
-            else:
-                break
+    def unique_expr(self, stack):
+        stack.reverse()
 
-        self.stack.append(ec.UniqueExpr(columns))
+        return ec.UniqueExpr(stack)
 
-    def uri_expr(self):
-        self.stack.append(ec.UriExpr)
+    def uri_expr(self, *args):
+        return ec.UriExpr()
 
-    # def xsd_datetime_expr(self):
+    # def xsd_datetime_expr(self, stack):
 
-    # def xsd_datetime_with_timezone_expr(self):
+    # def xsd_datetime_with_timezone_expr(self, stack):
 
-    # def xsd_date_expr(self):
+    # def xsd_date_expr(self, stack):
 
-    # def xsd_time_expr(self):
+    # def xsd_time_expr(self, stack):
 
-    # uk_date_expr(self):
+    # uk_date_expr(self, stack):
 
-    # date_expr(self):
+    # date_expr(self, stack):
 
-    # partial_uk_date_expr(self):
+    # partial_uk_date_expr(self, stack):
 
-    # partial_date_expr(self):
+    # partial_date_expr(self, stack):
 
-    def uuid4_expr(self):
-        self.stack.append(ec.Uuid4Expr())
+    def uuid4_expr(self, *args):
+        return ec.Uuid4Expr()
 
-    def positive_integer_expr(self):
-        self.stack.append(ec.PositiveIntegerExpr())
+    def positive_integer_expr(self, *args):
+        return ec.PositiveIntegerExpr()
 
-    def uppercase_expr(self):
-        self.stack.append(ec.UppercaseExpr())
+    def uppercase_expr(self, *args):
+        return ec.UppercaseExpr()
 
-    def lowercase_expr(self):
-        self.stack.append(ec.LowercaseExpr())
+    def lowercase_expr(self, *args):
+        return ec.LowercaseExpr()
 
-    def identical_expr(self):
-        self.stack.append(ec.IdenticalExpr())
+    def identical_expr(self, *args):
+        return ec.IdenticalExpr()
 
-    def external_single_expr(self):
-        self.single_expr()
+    def external_single_expr(self, stack):
+        return self.single_expr(stack)
 
-    def file_exists_expr(self):
-        prefix = None
-        if isinstance(self.stack[-1], (str, ec.ColumnRef)):
-            prefix = self.stack.pop()
+    def file_exists_expr(self, stack):
+        prefix = stack.pop() if stack else None
 
-        self.stack.append(ec.FileExistsExpr(prefix))
+        return ec.FileExistsExpr(prefix)
 
-    def integrity_check_expr(self):
-        folder_specification = self.stack.pop()
+    def integrity_check_expr(self, stack):
+        folder_specification = stack.pop()
         subfolder = None
         prefix = None
-        if self.stack:
-            if isinstance(self.stack[-1], (str, ec.ColumnRef)):
-                prefix = self.stack.pop()
+        if stack:
+            prefix = stack.pop()
 
-                if self.stack:
-                    if isinstance(self.stack[-1], (str, ec.ColumnRef)):
-                        prefix, subfolder = self.stack.pop(), prefix
+            if stack:
+                prefix, subfolder = stack.pop(), prefix
 
-        self.stack.append(ec.IntegrityCheckExpr(prefix, subfolder, folder_specification))
+        return ec.IntegrityCheckExpr(prefix, subfolder, folder_specification)
 
-    def checksum_expr(self):
-        algorithm = self.stack.pop()
-        file = self.stack.pop()
+    def checksum_expr(self, stack):
+        algorithm = stack.pop()
+        file = stack.pop()
 
-        self.stack.append(ec.ChecksumExpr(file, algorithm))
+        return ec.ChecksumExpr(file, algorithm)
 
-    def file_count_expr(self):
-        file = self.stack.pop()
+    def file_count_expr(self, stack):
+        file = stack.pop()
 
-        self.stack.append(ec.FileCountExpr(file))
-
+        return ec.FileCountExpr(file)
 
 
     # Data-providing expressions #
 
-    def string_provider(self):
-        val = self.stack.pop()
+    def string_provider(self, stack):
+        val = stack.pop()
 
-        self.stack.append(ec.StringProvider(val))
+        return ec.StringProvider(val)
 
-    def column_ref(self):
-        column = self.stack.pop()
+    def column_ref(self, stack):
+        column = stack.pop()
 
-        self.stack.append(ec.ColumnRef(column))
+        return ec.ColumnRef(column)
 
-    def concat_expr(self, count):
-        string_providers = [self.stack.pop() for i in range(count)]
+    def concat_expr(self, stack):
+        stack.reverse()
 
-        self.stack.append(ec.ConcatExpr(string_providers))
+        return ec.ConcatExpr(stack)
 
-    def no_ext_expr(self):
-        string_provider = self.stack.pop()
+    def no_ext_expr(self, stack):
+        string_provider = stack.pop()
 
-        self.stack.append(ec.NotExpr(string_provider))
+        return ec.NotExpr(string_provider)
 
-    def uri_decode_expr(self, count):
+    def uri_decode_expr(self, stack):
         encoding = None
-        string_provider = self.stack.pop()
+        string_provider = stack.pop()
 
-        if count == 2:
-            encoding, string_provider = string_provider, self.stack.pop()
+        if stack:
+            encoding, string_provider = string_provider, stack.pop()
 
-        self.stack.append(ec.UriDecodeExpr(string_provider, encoding))
+        return ec.UriDecodeExpr(string_provider, encoding)
 
-    def file_expr(self):
-        file = self.stack.pop()
+    def file_expr(self, stack):
+        file = stack.pop()
         prefix = None
-        if self.stack:
-            if isinstance(self.stack[-1], ec.StringProvider):
-                prefix = self.stack.pop()
+        if stack:
+            prefix = stack.pop()
 
-        self.stack.append(ec.FileExpr(prefix, file))
+        return ec.FileExpr(prefix, file)
 
 
 
