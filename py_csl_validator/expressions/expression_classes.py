@@ -280,7 +280,66 @@ class FileCountExpr(ValidatingExpr):
         pass
 
 
+class OrExpr(ValidatingExpr):
+
+    def __init__(self, expressions):
+        self.expressions = expressions
+
+    def validate(self, val):
+        pass
+
+
+class AndExpr(ValidatingExpr):
+
+    def __init__(self, expressions):
+        self.expressions = expressions
+
+    def validate(self, val):
+        pass
+
+
+class IfExpr(ValidatingExpr):
+
+    def __init__(self, condition, if_clause, else_clause):
+        self.condition = condition
+        self.if_clause = if_clause
+        self.else_clause = else_clause
+
+    def validate(self, val):
+        pass
+
+
+class IfClause(ValidatingExpr):
+
+    def __init__(self, expressions):
+        self.expressions = expressions
+
+    def validate(self, val):
+        pass
+
+
+class SwitchExpr(ValidatingExpr):
+
+    def __init__(self, cases, else_clause):
+        self.cases = cases
+        self.else_clause = else_clause
+
+    def validate(self, val):
+        pass
+
+
+class SwitchCaseExpr(ValidatingExpr):
+
+    def __init__(self, condition, if_clause):
+        self.condition = condition
+        self.if_clause = if_clause
+
+    def validate(self, val):
+        pass
+
+
 # Data-providing expressions #
+
 
 class DataExpr:
 
@@ -343,6 +402,9 @@ class FileExpr(DataExpr):
 
     def evaluate(self, context):
         pass
+
+
+
 
 
 

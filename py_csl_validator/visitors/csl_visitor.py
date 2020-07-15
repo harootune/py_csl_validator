@@ -40,14 +40,6 @@ class CslVisitor:
 
         return ec.Schema(prolog, body)
 
-    def parenthesized_expr(self, stack):
-        stack.reverse()
-
-        return ec.ParenthesizedExpr(stack)
-
-
-
-
     # prolog #
     def prolog(self, stack):
         global_directives = stack.pop()
@@ -115,6 +107,14 @@ class CslVisitor:
             col_ref = stack.pop()
 
         return ec.SingleExpr(expression, col_ref)
+
+    def external_single_expr(self, stack):
+        return self.single_expr(stack)
+
+    def parenthesized_expr(self, stack):
+        stack.reverse()
+
+        return ec.ParenthesizedExpr(stack)
 
     def is_expr(self, stack):
         comparison = stack.pop()
@@ -210,9 +210,6 @@ class CslVisitor:
     def identical_expr(self, *args):
         return ec.IdenticalExpr()
 
-    def external_single_expr(self, stack):
-        return self.single_expr(stack)
-
     def file_exists_expr(self, stack):
         prefix = stack.pop() if stack else None
 
@@ -240,6 +237,46 @@ class CslVisitor:
         file = stack.pop()
 
         return ec.FileCountExpr(file)
+
+    def or_expr(self, stack):
+        stack.reverse()
+
+        return ec.OrExpr(stack)
+
+    def and_expr(self, stack):
+        stack.reverse()
+
+        return ec.AndExpr(stack)
+
+    def if_expr(self, stack):
+        else_clause = None
+        if_clause = stack.pop()
+
+        if isinstance(stack[-1], ec.IfClause):
+            else_clause, if_clause = if_clause, stack.pop()
+
+        condition = stack.pop()
+
+        return ec.IfExpr(condition, if_clause, else_clause)
+
+    def if_clause(self, stack):
+        stack.reverse()
+
+        return ec.IfClause(stack)
+
+    def switch_expr(self, stack):
+        else_clause = stack.pop() if isinstance(stack[-1], ec.IfClause) else None
+        stack.reverse()
+
+        return ec.SwitchExpr(stack, else_clause)
+
+    def switch_case_expr(self, stack):
+        if_clause = stack.pop()
+        condition = stack.pop()
+
+        return ec.SwitchCaseExpr(condition, if_clause)
+
+
 
 
     # Data-providing expressions #
