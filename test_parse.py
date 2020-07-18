@@ -9,7 +9,7 @@ with open('py_csl_validator/grammars/csv_schema_1-2.lark', mode='r', newline='',
     grammar_text = grammar_file.read()
     parser = Lark(grammar_text)
 
-with open('test.csvs', mode='r', newline='', encoding='utf-8') as csvs_file:
+with open('test_2.csvs', mode='r', newline='', encoding='utf-8') as csvs_file:
     csvs_text = csvs_file.read()
 
 tree = parser.parse(csvs_text)

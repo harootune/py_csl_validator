@@ -47,6 +47,8 @@ class CslVisitor:
 
         return ec.Prolog(version, global_directives)
 
+    # global directives
+
     def global_directives(self, stack):
         stack.reverse()
 
@@ -55,20 +57,24 @@ class CslVisitor:
     def separator_directive(self, stack):
         separator = stack.pop()
 
-        return ec.SeparatorDirective(separator)
+        return 'separator', separator
 
     def total_columns_directive(self, stack):
         num_columns = stack.pop()
 
-        return ec.TotalColumnsDirective(num_columns)
+        return 'total_columns', num_columns
 
-    # def permit_empty_directive(self, stack)
+    def permit_empty_directive(self, *args):
+        return 'permit_empty', True
 
-    # def quoted_directive(self, stack):
+    def quoted_directive(self, *args):
+        return 'quoted', True
 
-    # def no_header_directive(self, stack):
+    def no_header_directive(self, *args):
+        return 'no_header', True
 
-    # def ignore_column_name_case_directive(self, stack):
+    def ignore_column_name_case_directive(self, *args):
+        return 'ignore_column_name_case', True
 
     # body #
 
@@ -315,8 +321,23 @@ class CslVisitor:
 
         return ec.SwitchCaseExpr(condition, if_clause)
 
+    # column directives #
+    def column_directives(self, stack):
+        stack.reverse()
 
+        return ec.ColumnDirectives(stack)
 
+    def optional_directive(self, *args):
+        return 'optional', True
+
+    def match_is_false_directive(self, *args):
+        return 'match_is_false', True
+
+    def ignore_case_directive(self, *args):
+        return 'ignore_case', True
+
+    def warning_directive(self, *args):
+        return 'warning', True
 
     # Data-providing expressions #
 

@@ -15,26 +15,23 @@ class Prolog:
 
 class GlobalDirectives:
 
-    def __init__(self, directives):
-        self.directives = directives
+    def __init__(self, stack):
 
+        self.directives = {
+            'separator': None,
+            'quoted': False,
+            'total_columns': None,
+            'permit_empty': False,
+            'no_header': False,
+            'ignore_column_name_case': False,
+        }
 
-class GlobalDirective:
-    pass
+        for el in stack:
+            self.directives[el[0]] = el[1]
 
-
-class SeparatorDirective(GlobalDirective):
-
-    def __init__(self, separator):
-        self.separator = separator
-
-
-class TotalColumnsDirective(GlobalDirective):
-
-    def __init__(self, num_columns):
-        self.num_columns = num_columns
-
-
+        if self.directives['no_header'] and self.directives['ignore_column_name_case']:
+            # TODO: Raise an error
+            pass
 # Body #
 
 
@@ -416,6 +413,22 @@ class SwitchCaseExpr(ValidatingExpr):
 
     def validate(self, val):
         pass
+
+# Column directives #
+
+
+class ColumnDirectives:
+
+    def __init__(self, stack):
+        self.directives = {
+            'optional': False,
+            'match_is_false': False,
+            'ignore_case': False,
+            'warning': False
+        }
+
+        for el in stack:
+            self.directives[el[0]] = el[1]
 
 
 # Data-providing expressions #

@@ -200,9 +200,9 @@ if_expr: "if(" (combinatorial_expr | non_conditional_expr) if_clause if_clause? 
 
 if_clause: "," column_validation_expr+
 
-switch_expr: "switch(" switch_case_expr+ if_clause? ")"
+switch_expr: "switch(" switch_case_expr ("," switch_case_expr)* if_clause? ")"
 
-switch_case_expr: "if(" (combinatorial_expr | non_conditional_expr) if_clause ")"
+switch_case_expr: "(" (combinatorial_expr | non_conditional_expr) if_clause ")"
 
 //imports
 
