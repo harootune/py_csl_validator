@@ -179,21 +179,60 @@ class CslVisitor:
     def uri_expr(self, *args):
         return ec.UriExpr()
 
-    # def xsd_datetime_expr(self, stack):
+    def xsd_datetime_expr(self, stack):
+        end = stack.pop() if stack else None
+        start = stack.pop() if stack else None
 
-    # def xsd_datetime_with_timezone_expr(self, stack):
+        return ec.XsdDateTimeExpr(start, end)
 
-    # def xsd_date_expr(self, stack):
+    def xsd_datetime_with_timezone_expr(self, stack):
+        end = stack.pop() if stack else None
+        start = stack.pop() if stack else None
 
-    # def xsd_time_expr(self, stack):
+        return ec.XsdDateTimeWithTimezoneExpr(start, end)
 
-    # uk_date_expr(self, stack):
+    def xsd_date_expr(self, stack):
+        end = stack.pop() if stack else None
+        start = stack.pop() if stack else None
 
-    # date_expr(self, stack):
+        return ec.XsdDateExpr(start, end)
 
-    # partial_uk_date_expr(self, stack):
+    def xsd_time_expr(self, stack):
+        end = stack.pop() if stack else None
+        start = stack.pop() if stack else None
 
-    # partial_date_expr(self, stack):
+        return ec.XsdTimeExpr(start, end)
+
+
+    def uk_date_expr(self, stack):
+        end = stack.pop() if stack else None
+        start = stack.pop() if stack else None
+
+        return ec.UkDateExpr(start, end)
+
+    def date_expr(self, stack):  # TODO: redo to account for string providers
+        if len(stack) == 5:
+            end = stack.pop()
+            start = stack.pop()
+        else:
+            end = None
+            start = None
+
+        day = stack.pop()
+        month = stack.pop()
+        year = stack.pop()
+
+        return ec.DateExpr(year, month, day, start, end)
+
+    def partial_uk_date_expr(self, *args):
+        return ec.PartialUkDateExpr()
+
+    def partial_date_expr(self, stack):
+        day = stack.pop()
+        month = stack.pop()
+        year = stack.pop()
+
+        return ec.PartialDateExpr(year, month, day)
 
     def uuid4_expr(self, *args):
         return ec.Uuid4Expr()

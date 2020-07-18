@@ -211,6 +211,86 @@ class UriExpr(ValidatingExpr):
         pass
 
 
+class XsdDateTimeExpr(ValidatingExpr):
+
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def validate(self, val):
+        pass
+
+
+class XsdDateTimeWithTimezoneExpr(ValidatingExpr):
+
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def validate(self, val):
+        pass
+
+
+class XsdDateExpr(ValidatingExpr):
+
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def validate(self, val):
+        pass
+
+
+class XsdTimeExpr(ValidatingExpr):
+
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def validate(self, val):
+        pass
+
+
+class UkDateExpr(ValidatingExpr):
+
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def validate(self, val):
+        pass
+
+
+class DateExpr(ValidatingExpr):
+
+    def __init__(self, year, month, day, start, end):
+        self.year = year
+        self.month = month
+        self.day = day
+        self.start = start
+        self.end = end
+
+    def validate(self, val):
+        pass
+
+
+class PartialUkDateExpr(ValidatingExpr):
+
+    def validate(self, val):
+        pass
+
+
+class PartialDateExpr(ValidatingExpr):
+
+    def __init__(self, year, month, day):
+        self.year = year
+        self.month = month
+        self.day = day
+
+    def validate(self, val):
+        pass
+
+
 class Uuid4Expr(ValidatingExpr):
 
     def validate(self, val):
