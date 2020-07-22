@@ -8,10 +8,7 @@ from .csl_visitor import CslVisitor
 
 class CslVisitor1_2(CslVisitor):
 
-    def __init__(self, tree):
-        super().__init__(tree)
-
-    ## stack operations ##
+    # custom methods #
 
     def start(self, stack):
         return stack.pop()

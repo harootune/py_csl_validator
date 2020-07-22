@@ -4,9 +4,6 @@ from lark import Tree, Token
 
 class CslVisitor:
 
-    def __init__(self, tree):
-        self.ruleset = self.visit(tree)
-
     def visit(self, node):
         if isinstance(node, Token):
             return node.value

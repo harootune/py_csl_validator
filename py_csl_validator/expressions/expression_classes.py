@@ -29,35 +29,32 @@ class GlobalDirectives:
         for el in stack:
             self.directives[el[0]] = el[1]
 
+        if self.directives['separator'] == 'TAB':
+            self.directives['separator'] = '\t'
+
         if self.directives['no_header'] and self.directives['ignore_column_name_case']:
             # TODO: Raise an error
             pass
 # Body #
 
 
-class ValidatingExpr:
-
-    def validate(self, val):
-        raise NotImplementedError
-
-
-class Body(ValidatingExpr):
+class Body:
 
     def __init__(self, column_defs):
         self.column_defs = column_defs
 
-    def validate(self, val):
-        pass
 
-
-class ColumnDefinition(ValidatingExpr):
+class ColumnDefinition:
 
     def __init__(self, col_name, col_rule):
         self.name = col_name
         self.rule = col_rule
 
-    def validate(self, val):
-        pass
+
+class ValidatingExpr:
+
+    def validate(self, val, row, context, ignore_case = False):
+        raise NotImplementedError
 
 
 class ColumnRule(ValidatingExpr):
@@ -66,8 +63,22 @@ class ColumnRule(ValidatingExpr):
         self.col_vals = col_vals
         self.col_directives = col_directives
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, ignore_case = False):
+        no_case = ignore_case or self.col_directives['ignore_case']  # allows for us to manually set case directive
+
+        valid = True
+        for expression in self.col_vals:  # TODO: handle parenthesized expressions
+            if not expression.validate(val, row, context, ignore_case=no_case):
+                if val == '' and self.col_directives['optional']:  # TODO: match_is_false and optional?
+                    continue
+                else:
+                    # TODO: Log an error or warning in context
+                    valid = False
+            elif self.col_directives['match_is_false']:
+                # TODO: Log an error or warning in context
+                valid = False
+
+        return valid
 
 
 class ColumnValidationExpr(ValidatingExpr):  # essentially a wrapper which makes checks for comb/noncomb expr easier
@@ -75,8 +86,8 @@ class ColumnValidationExpr(ValidatingExpr):  # essentially a wrapper which makes
     def __init__(self, expression):
         self.expression = expression
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, ignore_case = False):
+        return self.expression.validate(val, row, context, ignore_case=ignore_case)
 
 
 class ParenthesizedExpr(ValidatingExpr):
@@ -84,8 +95,8 @@ class ParenthesizedExpr(ValidatingExpr):
     def __init__(self, expressions):
         self.expressions = expressions
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, ignore_case = False):
+        return all(expr.validate(val, row, context, ignore_case=ignore_case) for expr in self.expressions)
 
 
 class SingleExpr(ValidatingExpr):
@@ -94,7 +105,7 @@ class SingleExpr(ValidatingExpr):
         self.expression = expression
         self.col_Ref = col_ref
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -103,7 +114,7 @@ class IsExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -112,7 +123,7 @@ class AnyExpr(ValidatingExpr):
     def __init__(self, comparisons):
         self.comparisons = comparisons
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -121,7 +132,7 @@ class NotExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -130,7 +141,7 @@ class InExpr(ValidatingExpr):
     def __init__(self, comparison):
         self. comparison = comparison
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -139,7 +150,7 @@ class StartsWithExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -148,7 +159,7 @@ class EndsWithExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -157,7 +168,7 @@ class RegExpExpr(ValidatingExpr):
     def __init__(self, pattern):
         self.pattern = pattern
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -167,7 +178,7 @@ class RangeExpr(ValidatingExpr):
         self.start = start
         self.end = end
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
@@ -177,13 +188,13 @@ class LengthExpr(ValidatingExpr):
         self.start = start
         self.end = end
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
 class EmptyExpr(ValidatingExpr):
 
-    def validate(self, val):
+    def validate(self, val, context):
         pass
 
 
