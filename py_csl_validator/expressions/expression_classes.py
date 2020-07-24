@@ -53,7 +53,7 @@ class ColumnDefinition:
 
 class ValidatingExpr:
 
-    def validate(self, val, row, context, ignore_case = False):
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
         raise NotImplementedError
 
 
@@ -63,12 +63,12 @@ class ColumnRule(ValidatingExpr):
         self.col_vals = col_vals
         self.col_directives = col_directives
 
-    def validate(self, val, row, context, ignore_case = False):
+    def validate(self, val, row, context, report_level='e', ignore_case = False):
         no_case = ignore_case or self.col_directives['ignore_case']  # allows for us to manually set case directive
 
         valid = True
         for expression in self.col_vals:  # TODO: handle parenthesized expressions
-            if not expression.validate(val, row, context, ignore_case=no_case):
+            if not expression.validate(val, row, context, report_level=report_level, ignore_case=no_case):
                 if val == '' and self.col_directives['optional']:  # TODO: match_is_false and optional?
                     continue
                 else:
@@ -86,8 +86,8 @@ class ColumnValidationExpr(ValidatingExpr):  # essentially a wrapper which makes
     def __init__(self, expression):
         self.expression = expression
 
-    def validate(self, val, row, context, ignore_case = False):
-        return self.expression.validate(val, row, context, ignore_case=ignore_case)
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        return self.expression.validate(val, row, context, report_level=report_level, ignore_case=ignore_case)
 
 
 class ParenthesizedExpr(ValidatingExpr):
@@ -95,18 +95,25 @@ class ParenthesizedExpr(ValidatingExpr):
     def __init__(self, expressions):
         self.expressions = expressions
 
-    def validate(self, val, row, context, ignore_case = False):
-        return all(expr.validate(val, row, context, ignore_case=ignore_case) for expr in self.expressions)
+    def validate(self, val, row, context, report_level='e', ignore_case = False):
+        return all(expr.validate(val, row, context, report_level=report_level, ignore_case=ignore_case) for expr in self.expressions)
 
 
 class SingleExpr(ValidatingExpr):
 
     def __init__(self, expression, col_ref):
         self.expression = expression
-        self.col_Ref = col_ref
+        self.col_ref = col_ref
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case = False):
+        if self.col_ref:
+            return self.expression.validate(row[self.col_ref.evaluate(row, context)],
+                                            row,
+                                            context,
+                                            report_level=report_level,
+                                            ignore_case=ignore_case)
+        else:
+            return self.expression.validate(val, row, context, ignore_case=ignore_case)
 
 
 class IsExpr(ValidatingExpr):
@@ -114,8 +121,17 @@ class IsExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_error='e', ignore_case = False):
+        if ignore_case:
+            valid = val.lower() == self.comparison.evaluate(row, context).lower()
+        else:
+            valid = val == self.comparison.evaluate(row, context)
+
+        if report_error != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class AnyExpr(ValidatingExpr):
@@ -123,7 +139,7 @@ class AnyExpr(ValidatingExpr):
     def __init__(self, comparisons):
         self.comparisons = comparisons
 
-    def validate(self, val, context):
+    def validate(self, val, row, context, ignore_case = False):
         pass
 
 
@@ -447,7 +463,7 @@ class ColumnDirectives:
 
 class DataExpr:
 
-    def evaluate(self, context):
+    def evaluate(self, row, context):
         raise NotImplementedError
 
 
@@ -457,8 +473,8 @@ class ColumnRef(DataExpr):
     def __init__(self, column):
         self.column = column
 
-    def evaluate(self, context):
-        pass
+    def evaluate(self, row, context):
+        return self.column.lower() if context.global_directives['ignore_column_name_case'] else self.column
 
 
 class StringProvider(DataExpr):
@@ -466,7 +482,7 @@ class StringProvider(DataExpr):
     def __init__(self, val):
         self.val = val
 
-    def evaluate(self, context):
+    def evaluate(self, row, context):
         pass
 
 
@@ -475,7 +491,7 @@ class ConcatExpr(DataExpr):
     def __init__(self, string_providers):
         self.string_providers = string_providers
 
-    def evaluate(self, context):
+    def evaluate(self, row, context):
         pass
 
 
@@ -484,7 +500,7 @@ class NoExtExpr(DataExpr):
     def __init__(self, string_provider):
         self.string_provider = string_provider
 
-    def evaluate(self, context):
+    def evaluate(self, row, context):
         pass
 
 
@@ -494,7 +510,7 @@ class UriDecodeExpr(DataExpr):
         self.string_provider = string_provider
         self.encoding = encoding
 
-    def evaluate(self, context):
+    def evaluate(self, row, context):
         pass
 
 
@@ -504,7 +520,7 @@ class FileExpr(DataExpr):
         self.prefix = prefix
         self.file = file
 
-    def evaluate(self, context):
+    def evaluate(self, row, context):
         pass
 
 

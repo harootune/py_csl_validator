@@ -25,6 +25,7 @@ class CslValidator:
 
     def validate(self, csv_file):
         valid = True
+        self.errors.clear()
 
         quoting = csv.QUOTE_ALL if self.global_directives['quoted'] else csv.QUOTE_MINIMAL
         delimiter = self.global_directives['separator'] if self.global_directives['separator'] else ','
@@ -67,6 +68,8 @@ class CslValidator:
 
             for row in reader:
                 self.row_count += 1
+                if self.global_directives['ignore_column_name_case']:
+                    row = {k.lower(): v for k, v in row.items()}
                 for key in temp_rules.keys():
                     if not temp_rules[key].validate(row[key], row, self):
                         valid = False
