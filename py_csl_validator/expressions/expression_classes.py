@@ -1,3 +1,7 @@
+# stdlib
+import re
+
+
 class Schema:  # TODO: Should this be a ValidatingExpr?
 
     def __init__(self, prolog, body):
@@ -63,7 +67,7 @@ class ColumnRule(ValidatingExpr):
         self.col_vals = col_vals
         self.col_directives = col_directives
 
-    def validate(self, val, row, context, report_level='e', ignore_case = False):
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
         no_case = ignore_case or self.col_directives['ignore_case']  # allows for us to manually set case directive
 
         valid = True
@@ -95,7 +99,7 @@ class ParenthesizedExpr(ValidatingExpr):
     def __init__(self, expressions):
         self.expressions = expressions
 
-    def validate(self, val, row, context, report_level='e', ignore_case = False):
+    def validate(self, val, row, context, report_level='e', ignore_case =False):
         return all(expr.validate(val, row, context, report_level=report_level, ignore_case=ignore_case) for expr in self.expressions)
 
 
@@ -105,7 +109,7 @@ class SingleExpr(ValidatingExpr):
         self.expression = expression
         self.col_ref = col_ref
 
-    def validate(self, val, row, context, report_level='e', ignore_case = False):
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
         if self.col_ref:
             return self.expression.validate(row[self.col_ref.evaluate(row, context)],
                                             row,
@@ -121,13 +125,13 @@ class IsExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, row, context, report_error='e', ignore_case = False):
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
         if ignore_case:
             valid = val.lower() == self.comparison.evaluate(row, context).lower()
         else:
             valid = val == self.comparison.evaluate(row, context)
 
-        if report_error != 'n' and not valid:
+        if report_level != 'n' and not valid:
             # TODO: error behavior
             pass
 
@@ -139,8 +143,17 @@ class AnyExpr(ValidatingExpr):
     def __init__(self, comparisons):
         self.comparisons = comparisons
 
-    def validate(self, val, row, context, ignore_case = False):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        if ignore_case:
+            valid = any([val.lower() == comparison.evaluate(row, context).lower() for comparison in self.comparisons])
+        else:
+            valid = any([val == comparison.evaluate(row, context) for comparison in self.comparisons])
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class NotExpr(ValidatingExpr):
@@ -148,17 +161,35 @@ class NotExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        if ignore_case:
+            valid = val.lower() != self.comparison.evaluate(row, context).lower()
+        else:
+            valid = val != self.comparison.evaluate(row, context)
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class InExpr(ValidatingExpr):
 
     def __init__(self, comparison):
-        self. comparison = comparison
+        self.comparison = comparison
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        if ignore_case:
+            valid = self.comparison.evaluate(row, context).lower() in val.lower()
+        else:
+            valid = self.comparison.evaluate(row, context) in val
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class StartsWithExpr(ValidatingExpr):
@@ -166,8 +197,17 @@ class StartsWithExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        if ignore_case:
+            valid = re.match(f'^{self.comparison.evaluate(row, context).lower()}', val.lower())
+        else:
+            valid = re.match(f'^{self.comparison.evaluate(row, context)}', val)
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class EndsWithExpr(ValidatingExpr):
@@ -175,8 +215,17 @@ class EndsWithExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        if ignore_case:
+            valid = re.match(f'{self.comparison.evaluate(row, context).lower()}$', val.lower())
+        else:
+            valid = re.match(f'{self.comparison.evaluate(row, context)}$', val)
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class RegExpExpr(ValidatingExpr):
@@ -210,8 +259,12 @@ class LengthExpr(ValidatingExpr):
 
 class EmptyExpr(ValidatingExpr):
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=True):
+        valid = False if val else True
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
 
 
 class NotEmptyExpr(ValidatingExpr):
