@@ -240,26 +240,41 @@ class RegExpExpr(ValidatingExpr):
 class RangeExpr(ValidatingExpr):
 
     def __init__(self, start, end):
-        self.start = start
-        self.end = end
+        self.start = start if start != '*' else -float('inf')
+        self.end = end if end != '*' else float('inf')
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        valid = self.start <= val <= self.end
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class LengthExpr(ValidatingExpr):
 
     def __init__(self, start, end):
-        self.start = start
-        self.end = end
+        self.start = start if start != '*' else -float('inf')
+        self.end = end if end != '*' else float('inf')
 
-    def validate(self, val, context):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        if not self.end:
+            valid = len(val) == self.start
+        else:
+            valid = self.start <= len(val) <= start.end
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
-class EmptyExpr(ValidatingExpr):
+class EmptyExpr(ValidatingExpr):  # TODO: Pass for behavior
 
-    def validate(self, val, row, context, report_level='e', ignore_case=True):
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
         valid = False if val else True
 
         if report_level != 'n' and not valid:
@@ -267,7 +282,7 @@ class EmptyExpr(ValidatingExpr):
             pass
 
 
-class NotEmptyExpr(ValidatingExpr):
+class NotEmptyExpr(ValidatingExpr):  # TODO: Pass for behavior
 
     def validate(self, val):
         pass
@@ -277,9 +292,28 @@ class UniqueExpr(ValidatingExpr):
 
     def __init__(self, columns):
         self.columns = columns
+        self.seen = set()
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        if columns:
+            combination = [row[col] for col in columns]
+            if combination not in self.seen:
+                valid = True
+                self.seen.add(combination)
+            else:
+                valid = False
+        else:
+            if val not in self.seen:
+                valid = True
+                self.seen.add(val)
+            else:
+                valid = False
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class UriExpr(ValidatingExpr):
