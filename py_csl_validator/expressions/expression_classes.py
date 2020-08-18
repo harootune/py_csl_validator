@@ -1,5 +1,6 @@
 # stdlib
 import re
+import urllib.urlparse as up
 
 
 class Schema:  # TODO: Should this be a ValidatingExpr?
@@ -263,7 +264,7 @@ class LengthExpr(ValidatingExpr):
         if not self.end:
             valid = len(val) == self.start
         else:
-            valid = self.start <= len(val) <= start.end
+            valid = self.start <= len(val) <= self.end
 
         if report_level != 'n' and not valid:
             # TODO: error behavior
@@ -295,8 +296,8 @@ class UniqueExpr(ValidatingExpr):
         self.seen = set()
 
     def validate(self, val, row, context, report_level='e', ignore_case=False):
-        if columns:
-            combination = [row[col] for col in columns]
+        if self.columns:
+            combination = [row[col] for col in self.columns]
             if combination not in self.seen:
                 valid = True
                 self.seen.add(combination)
@@ -318,8 +319,19 @@ class UniqueExpr(ValidatingExpr):
 
 class UriExpr(ValidatingExpr):
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        valid = True
+        try:
+            uri = up.urlparse(val)
+            uri.port  # checks for an invalid port because for some reason this is what it takes
+        except ValueError:
+            valid = False
+        
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class XsdDateTimeExpr(ValidatingExpr):
@@ -570,7 +582,13 @@ class StringProvider(DataExpr):
         self.val = val
 
     def evaluate(self, row, context):
-        pass
+        if isinstance(self.val, ColumnRef):
+            return row[self.val.evaluate(row, context)]  # a column ref in a string provider should produce the text in said column
+        if isinstance(self.val, DataExpr):
+            return self.val.evaluate(row, context)
+        else:
+            return self.val
+        
 
 
 class ConcatExpr(DataExpr):
@@ -579,7 +597,7 @@ class ConcatExpr(DataExpr):
         self.string_providers = string_providers
 
     def evaluate(self, row, context):
-        pass
+        return ''.join([provider.evaluate(row, context) for provider in self.string_providers])
 
 
 class NoExtExpr(DataExpr):
@@ -588,7 +606,12 @@ class NoExtExpr(DataExpr):
         self.string_provider = string_provider
 
     def evaluate(self, row, context):
-        pass
+        val = self.string_provider.evaluate(row, context)
+        period_index = val.rfind('.')
+        if period_index >= 0:
+            return val[0:period_index]
+        else:
+            return val
 
 
 class UriDecodeExpr(DataExpr):
