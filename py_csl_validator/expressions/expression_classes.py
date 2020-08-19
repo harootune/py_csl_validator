@@ -1,6 +1,9 @@
 # stdlib
 import re
-import urllib.urlparse as up
+import urllib.parse as up
+
+# third party
+import validators as v
 
 
 class Schema:  # TODO: Should this be a ValidatingExpr?
@@ -416,32 +419,77 @@ class PartialDateExpr(ValidatingExpr):
 
 class Uuid4Expr(ValidatingExpr):
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        try:
+            if ignore_case:
+                valid = v.uuid(val.lower())
+            else:
+                valid = v.uuid(val)
+        except v.ValidationFailure:
+            valid = False
+        
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class PositiveIntegerExpr(ValidatingExpr):
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        valid = val >= 0
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class UppercaseExpr(ValidatingExpr):
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):  # TODO: what to do if ignore case?
+        valid = all([c.isupper() for c in val])
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class LowercaseExpr(ValidatingExpr):
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):  # TODO: what to do if ignore case?
+        valid = all([c.islower() for c in val])
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class IdenticalExpr(ValidatingExpr):
 
-    def validate(self, val):
-        pass
+    def __init__(self):
+        self.comparison = None
+
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        temp_val = val.lower() if ignore_case else val
+        if self.comparison is None:
+            self.comparison = temp_val
+            valid = True
+        else:
+            valid = temp_val == self.comparison
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
+
 
 
 class FileExistsExpr(ValidatingExpr):
@@ -589,7 +637,6 @@ class StringProvider(DataExpr):
         else:
             return self.val
         
-
 
 class ConcatExpr(DataExpr):
 
