@@ -1,9 +1,14 @@
 # stdlib
 import re
+import os
+import pathlib
 import urllib.parse as up
 
 # third party
 import validators as v
+
+# local
+from py_csl_validator.utils import expression_utils as eu
 
 
 class Schema:  # TODO: Should this be a ValidatingExpr?
@@ -491,14 +496,27 @@ class IdenticalExpr(ValidatingExpr):
         return valid
 
 
-
 class FileExistsExpr(ValidatingExpr):
 
     def __init__(self, prefix):
         self.prefix = prefix
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        path = pathlib.Path(val)
+        if self.prefix is not None and not path.is_absolute():
+            curr_prefix = self.prefix.evaluate(row, context)
+            path = pathlib.Path(curr_prefix).joinpath(path)
+
+        if ignore_case:
+            path = eu.find_path_from_caseless(path)
+        
+        valid = path.exists() if path else False
+
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
 
 
 class IntegrityCheckExpr(ValidatingExpr):
@@ -514,8 +532,8 @@ class IntegrityCheckExpr(ValidatingExpr):
 
 class ChecksumExpr(ValidatingExpr):
 
-    def __init__(self, file, algorithm):
-        self.file = file
+    def __init__(self, file_path, algorithm):
+        self.file_path = file_path
         self.algorithm = algorithm
 
     def validate(self, val):
@@ -524,12 +542,22 @@ class ChecksumExpr(ValidatingExpr):
 
 class FileCountExpr(ValidatingExpr):
 
-    def __init__(self, file):
-        self.file = file
+    def __init__(self, file_path):
+        self.file_path = file_path
 
-    def validate(self, val):
-        pass
+    def validate(self, val, row, context, report_level='e', ignore_case=False):
+        path = pathlib.Path(self.file_path.evaluate(row, context))
+        if ignore_case:
+            path = eu.find_path_from_caseless(path)
+        
+        valid = os.listdir(path) == val
 
+        if report_level != 'n' and not valid:
+            # TODO: error behavior
+            pass
+
+        return valid
+            
 
 class OrExpr(ValidatingExpr):
 
@@ -673,12 +701,24 @@ class UriDecodeExpr(DataExpr):
 
 class FileExpr(DataExpr):
 
-    def __init__(self, prefix, file):
+    def __init__(self, prefix, file_path):
         self.prefix = prefix
-        self.file = file
+        self.file_path = file_path
 
     def evaluate(self, row, context):
-        pass
+        if self.prefix is not None:
+            curr_prefix = self.prefix.evaluate(row, context)
+            curr_path = self.file_path.evalaute(row, context)
+            
+            path_obj = pathlib.Path(curr_path)
+            if path_obj.is_absolute():
+                return path_obj
+            else:
+                prefix_obj = pathlib.Path(curr_prefix)
+                return prefix_obj.joinpath(path_obj)
+
+        else:
+            return pathlib.Path(self.file_path.evaluate(row, context))
 
 
 

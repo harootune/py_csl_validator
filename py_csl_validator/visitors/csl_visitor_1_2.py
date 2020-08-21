@@ -350,12 +350,12 @@ class CslVisitor1_2(CslVisitor):
         return ec.UriDecodeExpr(string_provider, encoding)
 
     def file_expr(self, stack):
-        file = stack.pop()
+        file_path = stack.pop()
         prefix = None
         if stack:
             prefix = stack.pop()
 
-        return ec.FileExpr(prefix, file)
+        return ec.FileExpr(prefix, file_path)
 
 
 
