@@ -11,6 +11,8 @@ import validators as v
 from py_csl_validator.utils import expression_utils as eu
 
 
+# Schema
+
 class Schema:  # TODO: Should this be a ValidatingExpr?
 
     def __init__(self, prolog, body):
@@ -48,8 +50,9 @@ class GlobalDirectives:
         if self.directives['no_header'] and self.directives['ignore_column_name_case']:
             # TODO: Raise an error
             pass
-# Body #
 
+
+# Body #
 
 class Body:
 
@@ -64,34 +67,43 @@ class ColumnDefinition:
         self.rule = col_rule
 
 
-class ValidatingExpr:
-
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
-        raise NotImplementedError
-
-
-class ColumnRule(ValidatingExpr):
+class ColumnRule:
 
     def __init__(self, col_vals, col_directives):
         self.col_vals = col_vals
         self.col_directives = col_directives
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
-        no_case = ignore_case or self.col_directives['ignore_case']  # allows for us to manually set case directive
+    def validate_column(self, key, row, context):
+        no_case = self.col_directives['ignore_case']
 
         valid = True
+        report_level = 'w' if self.col_directives['warning'] else 'e'  # replace characters with enum
+
         for expression in self.col_vals:  # TODO: handle parenthesized expressions
-            if not expression.validate(val, row, context, report_level=report_level, ignore_case=no_case):
-                if val == '' and self.col_directives['optional']:  # TODO: match_is_false and optional?
+            if expression.validate(key, row, context, ignore_case=no_case):
+                if self.col_directives['match_is_false']:
+                    expression.report_error(report_level, key, row, context, ignore_case=no_case)
+                    valid = False
+            else:
+                if (row[key] == '' and self.col_directives['optional']) or self.col_directives['match_is_false']:
                     continue
                 else:
-                    # TODO: Log an error or warning in context
+                    expression.report_error(report_level, key, row, context, ignore_case=no_case)
                     valid = False
-            elif self.col_directives['match_is_false']:
-                # TODO: Log an error or warning in context
-                valid = False
 
         return valid
+
+
+# Validating Expressions #
+# Expressions which are directly used to validate the document #
+
+class ValidatingExpr:
+
+    def validate(self, key, row, context, ignore_case=False):
+        raise NotImplementedError
+
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        raise NotImplementedError
 
 
 class ColumnValidationExpr(ValidatingExpr):  # essentially a wrapper which makes checks for comb/noncomb expr easier
@@ -99,8 +111,11 @@ class ColumnValidationExpr(ValidatingExpr):  # essentially a wrapper which makes
     def __init__(self, expression):
         self.expression = expression
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
-        return self.expression.validate(val, row, context, report_level=report_level, ignore_case=ignore_case)
+    def validate(self, key, row, context, ignore_case=False):
+        return self.expression.validate(key, row, context, ignore_case=ignore_case)
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        self.expression.report_error(report_level, key, row, context, ignore_case=ignore_case)
 
 
 class ParenthesizedExpr(ValidatingExpr):
@@ -108,8 +123,13 @@ class ParenthesizedExpr(ValidatingExpr):
     def __init__(self, expressions):
         self.expressions = expressions
 
-    def validate(self, val, row, context, report_level='e', ignore_case =False):
-        return all(expr.validate(val, row, context, report_level=report_level, ignore_case=ignore_case) for expr in self.expressions)
+    def validate(self, key, row, context, ignore_case =False):
+        return all(expr.validate(key, row, context, ignore_case=ignore_case) for expr in self.expressions)
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        for expression in self.expressions:
+            if not expression.validate(key, row, context, ignore_case):
+                expression.report_error(report_level, key, row, context, ignore_case)
 
 
 class SingleExpr(ValidatingExpr):
@@ -118,15 +138,20 @@ class SingleExpr(ValidatingExpr):
         self.expression = expression
         self.col_ref = col_ref
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if self.col_ref:
-            return self.expression.validate(row[self.col_ref.evaluate(row, context)],
+            return self.expression.validate(self.col_ref.evaluate(row, context),
                                             row,
                                             context,
-                                            report_level=report_level,
                                             ignore_case=ignore_case)
         else:
-            return self.expression.validate(val, row, context, ignore_case=ignore_case)
+            return self.expression.validate(key, row, context, ignore_case=ignore_case)
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        if self.col_ref:
+            self.expression.report_error(report_level, self.col_ref.evaluate(row, context), row, context, ignore_case=ignore_case)
+        else:
+            self.expression.report_error(report_level, key, row, context, ignore_case=False)
 
 
 class IsExpr(ValidatingExpr):
@@ -134,35 +159,44 @@ class IsExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if ignore_case:
-            valid = val.lower() == self.comparison.evaluate(row, context).lower()
+            valid = row[key].lower() == self.comparison.evaluate(row, context).lower()
         else:
-            valid = val == self.comparison.evaluate(row, context)
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+            valid = row[key] == self.comparison.evaluate(row, context)
 
         return valid
-
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'IsExpr: {row[key]} not equivalent to {self.comparison.evaluate(row, context)}'
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
+        
 
 class AnyExpr(ValidatingExpr):
 
     def __init__(self, comparisons):
         self.comparisons = comparisons
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if ignore_case:
-            valid = any([val.lower() == comparison.evaluate(row, context).lower() for comparison in self.comparisons])
+            valid = any([row[key].lower() == comparison.evaluate(row, context).lower() for comparison in self.comparisons])
         else:
-            valid = any([val == comparison.evaluate(row, context) for comparison in self.comparisons])
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+            valid = any([row[key] == comparison.evaluate(row, context) for comparison in self.comparisons])
 
         return valid
+
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'AnyExpr: {row[key]} not equivalent to any of the following:'
+        for comparison in self.comparisons:
+            msg += f' {comparison.evaluate(row, context)}'
+        
+        if ignore_case:
+            msg += ' (case_ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class NotExpr(ValidatingExpr):
@@ -170,17 +204,20 @@ class NotExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if ignore_case:
-            valid = val.lower() != self.comparison.evaluate(row, context).lower()
+            valid = row[key].lower() != self.comparison.evaluate(row, context).lower()
         else:
-            valid = val != self.comparison.evaluate(row, context)
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+            valid = row[key] != self.comparison.evaluate(row, context)
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'NotExpr: {row[key]} is equivalent to {self.comparison.evaluate(row, context)}'
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class InExpr(ValidatingExpr):
@@ -188,17 +225,20 @@ class InExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if ignore_case:
-            valid = self.comparison.evaluate(row, context).lower() in val.lower()
+            valid = self.comparison.evaluate(row, context).lower() in row[key].lower()
         else:
-            valid = self.comparison.evaluate(row, context) in val
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+            valid = self.comparison.evaluate(row, context) in row[key]
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'InExpr: {row[key]} is a substring of {self.comparison.evaluate(row, context)}'
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class StartsWithExpr(ValidatingExpr):
@@ -206,17 +246,20 @@ class StartsWithExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if ignore_case:
-            valid = re.match(f'^{self.comparison.evaluate(row, context).lower()}', val.lower())
+            valid = re.match(f'^{self.comparison.evaluate(row, context).lower()}', row[key].lower())
         else:
-            valid = re.match(f'^{self.comparison.evaluate(row, context)}', val)
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+            valid = re.match(f'^{self.comparison.evaluate(row, context)}', row[key])
 
         return valid
+
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'StartsWithExpr: {row[key]} begins with {self.comparison.evaluate(row, context)}'
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class EndsWithExpr(ValidatingExpr):
@@ -224,20 +267,23 @@ class EndsWithExpr(ValidatingExpr):
     def __init__(self, comparison):
         self.comparison = comparison
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if ignore_case:
-            valid = re.match(f'{self.comparison.evaluate(row, context).lower()}$', val.lower())
+            valid = re.match(f'{self.comparison.evaluate(row, context).lower()}$', row[key].lower())
         else:
-            valid = re.match(f'{self.comparison.evaluate(row, context)}$', val)
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+            valid = re.match(f'{self.comparison.evaluate(row, context)}$', row[key])
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'EndsWithExpr: {row[key]} ends with {self.comparison.evaluate(row, context)}'
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
-class RegExpExpr(ValidatingExpr):
+class RegExpExpr(ValidatingExpr):  # TODO: FIGURE OUT HOW TO EMULATE JAVA'S PATTERN CLASS
 
     def __init__(self, pattern):
         self.pattern = pattern
@@ -252,14 +298,18 @@ class RangeExpr(ValidatingExpr):
         self.start = start if start != '*' else -float('inf')
         self.end = end if end != '*' else float('inf')
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
-        valid = self.start <= val <= self.end
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+    def validate(self, key, row, context, ignore_case=False):
+        try:
+            valid = self.start <= float(row[key]) <= self.end
+        except ValueError:
+            valid = False
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'RangeExpr: {row[key]} is not a number between {self.start} and {self.end}'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class LengthExpr(ValidatingExpr):
@@ -268,34 +318,45 @@ class LengthExpr(ValidatingExpr):
         self.start = start if start != '*' else -float('inf')
         self.end = end if end != '*' else float('inf')
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if not self.end:
-            valid = len(val) == self.start
+            valid = len(row[key]) == self.start
         else:
-            valid = self.start <= len(val) <= self.end
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+            valid = self.start <= len(row[key]) <= self.end
 
         return valid
+
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'LengthExpr: Length of {row[key]} is not between {self.start} and {self.end}'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class EmptyExpr(ValidatingExpr):  # TODO: Pass for behavior
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
-        valid = False if val else True
+    def validate(self, key, row, context, ignore_case=False):
+        valid = row[key] == ''
 
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+        return valid
+
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'EmptyExpr: Column is not empty'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class NotEmptyExpr(ValidatingExpr):  # TODO: Pass for behavior
 
-    def validate(self, val):
-        pass
+    def validate(self, key, row, context, ignore_case=False):
+        valid = row[key] != ''
 
+        return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'NotEmptyExpr: Column is empty'
+
+        context.errors[context.row_count][key][report_level].append(msg)
+        
 
 class UniqueExpr(ValidatingExpr):
 
@@ -303,26 +364,44 @@ class UniqueExpr(ValidatingExpr):
         self.columns = columns
         self.seen = set()
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         if self.columns:
             combination = [row[col] for col in self.columns]
+            if ignore_case:
+                combination = [val.lower() for val in combination]
+
             if combination not in self.seen:
                 valid = True
                 self.seen.add(combination)
             else:
                 valid = False
         else:
+            val = row[key]
+            if ignore_case:
+                val = val.lower()
+
             if val not in self.seen:
                 valid = True
                 self.seen.add(val)
             else:
                 valid = False
 
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
-
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = 'UniqueExpr:'
+        if self.columns:
+            msg = ' Combination ['
+            for col in self.columns:
+                msg += f'{row[col]}, '
+            msg += '] is not unique'
+        else:
+            msg += f' Value {row[key]} is not unique'
+        
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class UriExpr(ValidatingExpr):

@@ -1,5 +1,6 @@
 # stdlib
 import csv
+from collections import defaultdict
 
 # local
 import py_csl_validator.utils.validator_utils as vu
@@ -21,7 +22,7 @@ class CslValidator:
         self.global_directives = schema.global_directives.directives
         self.column_rules = {str(col_def.name): col_def.rule for col_def in schema.body.column_defs}
         self.row_count = 0
-        self.errors = {}  # TODO: Should be a defaultdict
+        self.errors = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))  # nested defaultdicts: https://stackoverflow.com/questions/5029934/defaultdict-of-defaultdict
 
     def validate(self, csv_file):
         valid = True
@@ -40,6 +41,7 @@ class CslValidator:
             # check column names
             if self.global_directives['no_header']:
                 fieldnames = list(self.column_rules.keys())
+                cf.seek(0)  # TODO: Make sure this does the right thing
             else:
                 fieldnames = None
 
@@ -71,7 +73,7 @@ class CslValidator:
                 if self.global_directives['ignore_column_name_case']:
                     row = {k.lower(): v for k, v in row.items()}
                 for key in temp_rules.keys():
-                    if not temp_rules[key].validate(row[key], row, self):
+                    if not temp_rules[key].validate_column(key, row, self):
                         valid = False
 
             return valid
