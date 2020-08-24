@@ -406,19 +406,20 @@ class UniqueExpr(ValidatingExpr):
 
 class UriExpr(ValidatingExpr):
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         valid = True
         try:
-            uri = up.urlparse(val)
+            uri = up.urlparse(row[key])
             uri.port  # checks for an invalid port because for some reason this is what it takes
         except ValueError:
             valid = False
-        
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'UriExpr: {row[key]} could not be parsed as a uri.'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class XsdDateTimeExpr(ValidatingExpr):
@@ -503,76 +504,87 @@ class PartialDateExpr(ValidatingExpr):
 
 class Uuid4Expr(ValidatingExpr):
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         try:
             if ignore_case:
-                valid = v.uuid(val.lower())
+                valid = v.uuid(row[key].lower())
             else:
-                valid = v.uuid(val)
+                valid = v.uuid(row[key])
         except v.ValidationFailure:
             valid = False
-        
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'Uuid4Expr: {row[key]} is not a valid UUID4'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class PositiveIntegerExpr(ValidatingExpr):
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
-        valid = val >= 0
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
-
+    def validate(self, key, row, context, ignore_case=False):
+        try:
+            val = float(row[key])
+            valid = val.is_integer() and val >= 0
+        except ValueError: 
+            valid = False
+        
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'PositiveIntegerExpr: {row[key]} is not a positive integer'
 
+        context.errors[context.row_count][key][report_level].append(msg)
+            
 
 class UppercaseExpr(ValidatingExpr):
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):  # TODO: what to do if ignore case?
-        valid = all([c.isupper() for c in val])
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+    def validate(self, key, row, context, ignore_case=False):  # TODO: what to do if ignore case?
+        valid = all([c.isupper() for c in row[key]])
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'UppercaseExpr: {row[key]} is not all uppercase'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class LowercaseExpr(ValidatingExpr):
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):  # TODO: what to do if ignore case?
-        valid = all([c.islower() for c in val])
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+    def validate(self, key, row, context, ignore_case=False):  # TODO: what to do if ignore case?
+        valid = all([c.islower() for c in row[key]])
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'UppercaseExpr: {row[key]} is not all uppercase'
 
+        context.errors[context.row_count][key][report_level].append(msg)
+    
 
 class IdenticalExpr(ValidatingExpr):
 
     def __init__(self):
         self.comparison = None
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
-        temp_val = val.lower() if ignore_case else val
+    def validate(self, key, row, context, ignore_case=False):
+        temp_val = row[key].lower() if ignore_case else row[key]
         if self.comparison is None:
             self.comparison = temp_val
             valid = True
         else:
             valid = temp_val == self.comparison
 
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
-
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'IdenticalExpr: {row[key]} deviates from previous column values'
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class FileExistsExpr(ValidatingExpr):
@@ -580,8 +592,8 @@ class FileExistsExpr(ValidatingExpr):
     def __init__(self, prefix):
         self.prefix = prefix
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
-        path = pathlib.Path(val)
+    def validate(self, key, row, context, report_level='e', ignore_case=False):
+        path = pathlib.Path(row[key])
         if self.prefix is not None and not path.is_absolute():
             curr_prefix = self.prefix.evaluate(row, context)
             path = pathlib.Path(curr_prefix).joinpath(path)
@@ -591,11 +603,19 @@ class FileExistsExpr(ValidatingExpr):
         
         valid = path.exists() if path else False
 
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
-
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        path = pathlib.Path(row[key])
+        if self.prefix is not None and not path.is_absolute():
+            curr_prefix = self.prefix.evaluate(row, context)
+            path = pathlib.Path(curr_prefix).joinpath(path)
+        
+        msg = f'FileExistsExpr: {path} is not an extant path'
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class IntegrityCheckExpr(ValidatingExpr):
@@ -624,18 +644,21 @@ class FileCountExpr(ValidatingExpr):
     def __init__(self, file_path):
         self.file_path = file_path
 
-    def validate(self, val, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         path = pathlib.Path(self.file_path.evaluate(row, context))
         if ignore_case:
             path = eu.find_path_from_caseless(path)
         
-        valid = os.listdir(path) == val
-
-        if report_level != 'n' and not valid:
-            # TODO: error behavior
-            pass
+        valid = len(os.listdir(path)) == float(row[key])
 
         return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'FileCountExpr: {self.file_path.evaluate(row, context)} did not contain {row[key]} files at check time'
+        if ignore_case:
+            msg += ' (case ignored)'
+        
+        context.errors[context.row_count][key][report_level].append(msg)
             
 
 class OrExpr(ValidatingExpr):
@@ -787,7 +810,7 @@ class FileExpr(DataExpr):
     def evaluate(self, row, context):
         if self.prefix is not None:
             curr_prefix = self.prefix.evaluate(row, context)
-            curr_path = self.file_path.evalaute(row, context)
+            curr_path = self.file_path.evaluate(row, context)
             
             path_obj = pathlib.Path(curr_path)
             if path_obj.is_absolute():
