@@ -2,6 +2,7 @@
 import re
 import os
 import pathlib
+import hashlib
 import urllib.parse as up
 
 # third party
@@ -592,7 +593,7 @@ class FileExistsExpr(ValidatingExpr):
     def __init__(self, prefix):
         self.prefix = prefix
 
-    def validate(self, key, row, context, report_level='e', ignore_case=False):
+    def validate(self, key, row, context, ignore_case=False):
         path = pathlib.Path(row[key])
         if self.prefix is not None and not path.is_absolute():
             curr_prefix = self.prefix.evaluate(row, context)
@@ -601,7 +602,7 @@ class FileExistsExpr(ValidatingExpr):
         if ignore_case:
             path = eu.find_path_from_caseless(path)
         
-        valid = path.exists() if path else False
+        valid = path.exists() if path is not None else False
 
         return valid
     
@@ -621,24 +622,81 @@ class FileExistsExpr(ValidatingExpr):
 class IntegrityCheckExpr(ValidatingExpr):
 
     def __init__(self, prefix, subfolder, folder_specification):
-        self.prefix = prefix
-        self.subfolder = subfolder if subfolder else 'content/'
+        self.prefix = prefix if prefix else ''
+        self.subfolder = subfolder if subfolder else 'content'
         self.folder_specification = folder_specification
 
-    def validate(self, val):
-        pass
+    def validate(self, key, row, context, ignore_case=False):
+        path = pathlib.path(row[key])
+        if self.prefix is not None and not path.is_absolute():
+            curr_prefix = self.prefix.evaluate(row, context)
+            path = pathlib.Path(curr_prefix).joinpath(path)
+
+        subfolder = self.subfolder if subfolder == 'content' else self.subfolder.evaluate(row, context)
+
+        path = path.joinpath(subfolder)
+
+        # TODO: Figure out how to differentiate between folders and files with os
+        # https://pythonexamples.org/python-check-if-path-is-file-or-directory/
+    
+
 
 
 class ChecksumExpr(ValidatingExpr):
 
     def __init__(self, file_path, algorithm):
         self.file_path = file_path
-        self.algorithm = algorithm
+        self.algorithm = algorithm.lower()
 
-    def validate(self, val):
-        pass
+    def validate(self, key, row, context, ignore_case=False):
+        if self.algorithm not in hashlib.algorithms_available:
+            return False
+            # TODO: Move to load-time errors
+        
+        path = pathlib.Path(self.file_path.evaluate(row, context))
+        if ignore_case:
+            path = eu.find_path_from_caseless(path)
+            if not path:
+                return False
+        
+        try:
+            with open(path, mode='rb') as infile:
+                hash_alg = hashlib.new(self.algorithm)
+                file_bytes = infile.read()
+                hash_alg.update(file_bytes)
+                file_hash = hash_alg.hexdigest()
 
+                checksum = row[key]
+                if ignore_case:
+                    checksum = checksum.lower()
+                
+                valid = file_hash == checksum
+        except FileNotFoundError as e:
+            valid = False
+        
+        return valid
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        if self.algorithm not in hashlib.algorithms_available:
+            msg = f'ChecksumExpr: {self.algorithm} not available with this interpeter'
+            # TODO: Move to load-time errors
+        else:
+            path = pathlib.Path(self.file_path.evaluate(row, context))
+            if ignore_case:
+                path = eu.find_path_from_caseless(path)
+            
+            if path is None:
+                msg = f'ChecksumExpr: {self.file_path.evaluate(row, context)} does not correspond to a case-ignored path'
+            elif not path.exists():
+                msg =f'ChecksumExpr: {"".join(path.parts)} not found in filesystem'
+                if ignore_case:
+                    msg += ' (case ignored)'
+            else:
+                msg = f'ChecksumExpr: {"".join(path.parts)} {self.algorithm} checksum does not match.'
 
+            context.errors[context.row_count][key][report_level].append(msg)
+            
+                
 class FileCountExpr(ValidatingExpr):
 
     def __init__(self, file_path):
@@ -648,12 +706,20 @@ class FileCountExpr(ValidatingExpr):
         path = pathlib.Path(self.file_path.evaluate(row, context))
         if ignore_case:
             path = eu.find_path_from_caseless(path)
+            if path is None:
+                return False
         
         valid = len(os.listdir(path)) == float(row[key])
 
         return valid
     
     def report_error(self, report_level, key, row, context, ignore_case=False):
+        path = pathlib.Path(self.file_path.evaluate(row, context))
+        if ignore_case:
+            path = eu.find_path_from_caseless(path)
+            if path is None:
+                msg = f'FileCountExpr: {self.file_path.evaluate(row, context)} does not correspond to a case-ignored path'
+
         msg = f'FileCountExpr: {self.file_path.evaluate(row, context)} did not contain {row[key]} files at check time'
         if ignore_case:
             msg += ' (case ignored)'
