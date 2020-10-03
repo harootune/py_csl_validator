@@ -3,6 +3,8 @@ import re
 import os
 import pathlib
 import hashlib
+import time
+import datetime
 import urllib.parse as up
 
 # third party
@@ -428,19 +430,84 @@ class XsdDateTimeExpr(ValidatingExpr):
     def __init__(self, start, end):
         self.start = start
         self.end = end
+        self.start_comp = None
+        self.end_comp = None
 
-    def validate(self, val):
-        pass
+        if self.start is not None and self.end is not None:
+            self.start = self.start.replace('Z', '+00:00')
+            self.end = self.end.replace('Z', '+00:00')
+            self.start_comp = datetime.datetime.fromisoformat(self.start)
+            self.end_comp = datetime.datetime.fromisoformat(self.end)
 
+    def validate(self, key, row, context, ignore_case=False):
+        val = row[key].strip()
+        if ignore_case:
+            val = val.upper()
+        
+        pattern = """-?[0-9]{4}-(((0(1|3|5|7|8)|1(0|2))-(0[1-9]|(1|2)[0-9]|3[0-1]))|((0(4|6|9)|11)-(0[1-9]|(1|2)[0-9]|30))|(02-(0[1-9]|(1|2)[0-9])))
+                        T([0-1][0-9]|2[0-4]):(0[0-9]|[1-5][0-9]):(0[0-9]|[1-5][0-9])(\.[0-9]{3})?((\+|-)(0[0-9]|1[0-9]|2[0-4]):(0[0-9]|[1-5][0-9])|Z)?"""
+
+        is_datetime = re.fullmatch(pattern, val)
+
+        if is_datetime:
+            if self.start and self.end:
+                val = val.replace('Z', '+00:00')
+                val = datetime.datetime.fromisoformat(val)
+                return self.start_comp <= val <= self.end_comp
+        
+        return is_datetime
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'XsdDateTimeExpr: {row[key]} could not be parsed as an XSD datetime'
+        if self.start and self.end:
+            msg += f' or did not fall between {self.start} and {self.end}'
+        if ignore_case:
+            msg +=  ' (case ignored)'
+
+        context.errors[context.row_count][key][report_level].append(msg)
+                
 
 class XsdDateTimeWithTimezoneExpr(ValidatingExpr):
 
     def __init__(self, start, end):
         self.start = start
         self.end = end
+        self.start_comp = None
+        self.end_comp = None
 
-    def validate(self, val):
-        pass
+        if self.start is not None and self.end is not None:
+            self.start = self.start.replace('Z', '+00:00')
+            self.end = self.end.replace('Z', '+00:00')
+            self.start_comp = datetime.datetime.fromisoformat(self.start)
+            self.end_comp = datetime.datetime.fromisoformat(self.end)
+
+    def validate(self, key, row, context, ignore_case=False):
+        val = row[key].strip()
+        if ignore_case:
+            val = val.upper()
+        
+        # the pattern here is almost exactly identical to XsdDateTimeExpr, but the timezone isn't optional
+        pattern = """-?[0-9]{4}-(((0(1|3|5|7|8)|1(0|2))-(0[1-9]|(1|2)[0-9]|3[0-1]))|((0(4|6|9)|11)-(0[1-9]|(1|2)[0-9]|30))|(02-(0[1-9]|(1|2)[0-9])))
+                        T([0-1][0-9]|2[0-4]):(0[0-9]|[1-5][0-9]):(0[0-9]|[1-5][0-9])(\.[0-9]{3})?((\+|-)(0[0-9]|1[0-9]|2[0-4]):(0[0-9]|[1-5][0-9])|Z)""" 
+
+        is_datetime = re.fullmatch(pattern, val)
+
+        if is_datetime:
+            if self.start and self.end:
+                val = val.replace('Z', '+00:00')
+                val = datetime.datetime.fromisoformat(val)
+                return self.start_comp <= val <= self.end_comp
+        
+        return is_datetime
+
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'XsdDateTimeWithTimezoneExpr: {row[key]} could not be parsed as an XSD datetime with timezone'
+        if self.start and self.end:
+            msg += f' or did not fall between {self.start} and {self.end}'
+        if ignore_case:
+            msg +=  ' (case ignored)'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class XsdDateExpr(ValidatingExpr):
@@ -448,9 +515,35 @@ class XsdDateExpr(ValidatingExpr):
     def __init__(self, start, end):
         self.start = start
         self.end = end
+        self.start_comp = None
+        self.end_comp = None
 
-    def validate(self, val):
-        pass
+        if self.start is not None and self.end is not None:
+            self.start_comp = datetime.datetime.fromisoformat(self.start)
+            self.end_comp = datetime.datetime.fromisoformat(self.end)
+
+    def validate(self, key, row, context, ignore_case=False):
+        val = row[key].strip()
+        
+        pattern = """-?[0-9]{4}-(((0(1|3|5|7|8)|1(0|2))-(0[1-9]|(1|2)[0-9]|3[0-1]))|((0(4|6|9)|11)-(0[1-9]|(1|2)[0-9]|30))|(02-(0[1-9]|(1|2)[0-9])))""" 
+
+        is_date = re.fullmatch(pattern, val)
+
+        if is_date:
+            if self.start and self.end:
+                val = datetime.datetime.fromisoformat(val)
+                return self.start_comp <= val <= self.end_comp
+        
+        return is_date
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'XsdDateExpr: {row[key]} could not be parsed as an XSD date'
+        if self.start and self.end:
+            msg += f' or did not fall between {self.start} and {self.end}'
+        if ignore_case:
+            msg +=  ' (case ignored)'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class XsdTimeExpr(ValidatingExpr):
@@ -458,9 +551,39 @@ class XsdTimeExpr(ValidatingExpr):
     def __init__(self, start, end):
         self.start = start
         self.end = end
+        self.start_comp = None
+        self.end_comp = None
 
-    def validate(self, val):
-        pass
+        if self.start is not None and self.end is not None:
+            self.start_comp = time.strptime(self.start, '%H:%M:%S%z')
+            self.end_comp = time.strptime(self.end, '%H:%M:%S%z')
+
+    def validate(self, key, row, context, ignore_case=False):
+        val = row[key].strip()
+        if ignore_case:
+            val = val.upper()
+
+        # timezone is not optional
+        pattern = """([0-1][0-9]|2[0-4]):(0[0-9]|[1-5][0-9]):(0[0-9]|[1-5][0-9])(\.[0-9]{3})?((\+|-)(0[0-9]|1[0-9]|2[0-4]):(0[0-9]|[1-5][0-9])|Z)""" 
+
+        is_time = re.fullmatch(pattern, val)
+
+        if is_time:
+            if self.start and self.end:
+                val = val.replace('Z', '+00:00')
+                val = time.strptime(self.start, '%H:%M:%S%z')
+                return self.start_comp <= val <= self.end_comp
+        
+        return is_time
+    
+    def report_error(self, report_level, key, row, context, ignore_case=False):
+        msg = f'XsdDateTimeExpr: {row[key]} could not be parsed as an XSD time with timezone'
+        if self.start and self.end:
+            msg += f' or did not fall between {self.start} and {self.end}'
+        if ignore_case:
+            msg +=  ' (case ignored)'
+
+        context.errors[context.row_count][key][report_level].append(msg)
 
 
 class UkDateExpr(ValidatingExpr):
