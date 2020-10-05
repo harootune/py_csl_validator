@@ -2,11 +2,13 @@
 from lark import Tree, Token
 
 # local
-import py_csl_validator.expressions.expression_classes as ec
+import py_csl_validator.expressions.expression_classes_1_1 as expressions
 from .csl_visitor import CslVisitor
 
 
 class CslVisitor1_1(CslVisitor):
+
+    ec = expressions.Expressions1_1
 
     # custom methods #
 

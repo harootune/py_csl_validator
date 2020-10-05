@@ -184,13 +184,11 @@ file_expr: "file(" (string_provider ",")? string_provider ")"
 
 file_count_expr: "fileCount(" file_expr ")"
 
-string_provider: column_ref | STRING_LITERAL | concat_expr | no_ext_expr | uri_decode_expr
+string_provider: column_ref | STRING_LITERAL | concat_expr | no_ext_expr
 
 concat_expr: "concat(" string_provider ("," string_provider)+ ")"
 
 no_ext_expr: "noExt(" string_provider ")"
-
-uri_decode_expr: "uriDecode(" string_provider ("," string_provider)? ")"
 
 parenthesized_expr: "(" column_validation_expr+ ")"
 
