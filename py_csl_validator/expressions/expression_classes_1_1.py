@@ -876,9 +876,26 @@ class Expressions1_1:
 
         def __init__(self, expressions):
             self.expressions = expressions
+            self.flags = None
 
-        def validate(self, val):
-            pass
+        def validate(self, key, row, context, ignore_case=False):
+            self.flags = []
+            for expression in self.expressions:
+                self.flags.append(expression.validate(key, row, context, ignore_case=ignore_case))
+
+            return all(flags)
+        
+        def report_error(self, report_level, key, row, context, ignore_case=False):
+            msg = f'AndExpr: {row[key]} failed to validate against expressions:'
+            for i in range(len(self.flags)):
+                if not self.flags[i]:
+                    msg += f' {i + 1} (type: {type(self.expressions[i].__name__)})'
+            msg += '. See other errors for details.'
+
+            for expression in self.expressions:
+                expression.report_error(report_level, key, row, context, ignore_case=ignore_case)
+            
+            context.errors[context.row_count][key][report_level].append(msg)
 
 
     class IfExpr(ValidatingExpr):
@@ -887,18 +904,52 @@ class Expressions1_1:
             self.condition = condition
             self.if_clause = if_clause
             self.else_clause = else_clause
+            self.if_flag = None
+            self.else_flag = None
 
-        def validate(self, val):
-            pass
+        def validate(self, key, row, context, ignore_case=False):
+            self.if_flag = False
+            self.else_flag = True
+
+            self.condition.validate(key, row, context, ignore_case=ignore_case)
+            if self.condition:
+                self.if_flag = True
+                val = self.if_clause.validate(key, row, context, ignore_case=ignore_case)
+            else:
+                self.else_flag = True
+                val = False
+                if self.else_clause:
+                    val = self.else_clause.validate(key, row, context, ignore_case=ignore_case)
+            
+            return val
+        
+        def report_error(self, report_level, key, row, context, ignore_case=False):
+            if self.if_flag:
+                msg = f'IfExpr: Condition met. {row[key]} failed to validate against if clause. See other errors for details.'
+                self.if_clause.report_error(report_level, key, row, context, ignore_case=ignore_case)
+            if self.else_flag:
+                if self.else_clause:
+                    msg = f'IfExpr: Condition not met. {row[key]} failed to validate against else clause. See other errors for details.'
+                    self.else_clause.report_error(report_level, key, row, context, ignore_case=ignore_case)
+                else:
+                    msg = f'IfExpr: Condition not met, but no else clause provided. {row[key]} failed to validate.'
+            
+            context.errors[context.row_count][key][report_level].append(msg)
 
 
-    class IfClause(ValidatingExpr):
+    class IfClause(AndExpr):
 
-        def __init__(self, expressions):
-            self.expressions = expressions
+        def report_error(self, report_level, key, row, context, ignore_case=False):
+            msg = f'IfClause: {row[key]} failed to validate against expressions:'
+            for i in range(len(self.flags)):
+                if not self.flags[i]:
+                    msg += f' {i + 1} (type: {type(self.expressions[i].__name__)})'
+            msg += '. See other errors for details. This may be the if or else clause of the parent IfExpr.'
 
-        def validate(self, val):
-            pass
+            for expression in self.expressions:
+                expression.report_error(report_level, key, row, context, ignore_case=ignore_case)
+            
+            context.errors[context.row_count][key][report_level].append(msg)
 
 
     class SwitchExpr(ValidatingExpr):
